@@ -1,0 +1,707 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Pilot Logbook - Cloud Sync</title>
+    <style>
+        /* [CSS 전역 변수 및 기본 테마 설정] */
+        :root { 
+            --ap-navy: #00264d; --ap-gold: #c5a059; --bg: #f2f4f7; 
+            --white: #ffffff; --accent: #e67e22; --danger: #e74c3c; 
+            --google-green: #0f9d58; --google-blue: #4285f4;
+        }
+
+        /* [기본 레이아웃 및 본문 스타일] */
+        body { 
+            font-family: 'Pretendard', 'Malgun Gothic', sans-serif; 
+            background-color: var(--bg); margin: 0; display: flex; 
+            flex-direction: column; height: 100vh; overflow: hidden; 
+        }
+        
+        /* [상단 헤더 및 탭 메뉴 스타일] */
+        .header { background: var(--ap-navy); color: white; padding: 10px 15px; flex-shrink: 0; }
+        .tab-menu { display: flex; gap: 10px; margin-top: 10px; border-bottom: 1px solid rgba(255,255,255,0.2); flex-wrap: wrap;}
+        .tab-btn { background: none; border: none; color: #aaa; padding: 8px 15px; cursor: pointer; font-weight: bold; font-size: 0.9rem; transition: 0.3s; }
+        .tab-btn.active { color: var(--ap-gold); border-bottom: 3px solid var(--ap-gold); }
+
+        /* [콘텐츠 섹션 제어] */
+        .content-section { flex: 1; display: none; overflow: auto; flex-direction: column; }
+        .content-section.active { display: flex; }
+
+        /* [상단 대시보드 및 Recency 카드 스타일] */
+        .log-dashboard { display: grid; grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); gap: 8px; padding: 10px; background: #eaedf2; border-bottom: 1px solid #ccc; }
+        .dash-card { background: white; padding: 8px; border-radius: 6px; text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,0.1); border-top: 3px solid var(--ap-navy); transition: 0.3s; }
+        .dash-label { font-size: 0.65rem; color: #666; font-weight: bold; margin-bottom: 3px; }
+        .dash-value { font-size: 0.9rem; font-weight: 800; color: var(--ap-navy); }
+        .dash-recency { font-size: 0.65rem; color: var(--ap-navy); font-weight: bold; margin-top: 2px; }
+
+        /* [통계 필터 영역 스타일] */
+        .stat-filter-area { 
+            padding: 10px 15px; display: flex; flex-wrap: nowrap; overflow-x: auto; 
+            gap: 8px; background: white; border-bottom: 1px solid #ddd; align-items: center; 
+        }
+        .filter-group { display: flex; align-items: center; gap: 8px; }
+        .filter-group label { font-size: 0.8rem; font-weight: bold; color: var(--ap-navy); white-space: nowrap; min-width: auto; }
+        .stat-filter-area select, .stat-filter-area input { padding: 5px; border-radius: 4px; border: 1px solid #ccc; font-size: 0.8rem; width: 100%; }
+
+        /* [통계 카드 컨테이너 스타일] */
+        .stats-container { padding: 20px; display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px; align-content: start; }
+        @media (min-width: 768px) { .stats-container { grid-template-columns: repeat(4, 1fr); } }
+
+        .stat-card { 
+            background: white; padding: 20px 10px; border-radius: 12px; text-align: center; 
+            box-shadow: 0 4px 10px rgba(0,0,0,0.05); border-top: 4px solid var(--ap-navy); border-left: none; 
+            display: flex; flex-direction: column; justify-content: center; height: 100px; 
+        }
+        .stat-label { font-size: 0.7rem; color: #888; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 5px; font-weight: 600; }
+        .stat-value { font-size: 1.5rem; font-weight: 800; color: var(--ap-navy); line-height: 1.1; }
+        .stat-sub { font-size: 0.8rem; color: #999; font-weight: normal; display: block; margin-top: 2px; }
+
+        /* [비행 로그 입력 필드 스타일] */
+        .input-section { background: var(--white); padding: 10px; border-bottom: 1px solid #ddd; display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-end; flex-shrink: 0; }
+        .field { display: flex; flex-direction: column; gap: 2px; }
+        .field label { font-size: 0.7rem; font-weight: 800; color: #555; }
+        input, select { padding: 5px; border: 1px solid #ccc; border-radius: 4px; font-size: 0.8rem; height: 30px; box-sizing: border-box; }
+        
+        #date { width: 100px; } #reg { width: 70px; } #fm, #to { width: 40px; } #fltno { width: 80px; }
+        #code { width: 60px; } #total, #sim { width: 60px; } #dto, #nto, #dld, #nld { width: 40px; }
+        #remark { width: 180px; }
+
+        /* [버튼 스타일] */
+        .btn-area { display: flex; gap: 5px; margin-left: auto; align-items: center; }
+        .btn-add { background: var(--ap-navy); color: white; border: none; padding: 0 12px; height: 30px; border-radius: 4px; font-weight: bold; cursor: pointer; }
+        .btn-update { background: var(--accent); color: white; border: none; padding: 0 12px; height: 30px; border-radius: 4px; font-weight: bold; cursor: pointer; display: none; }
+        .btn-export { background: var(--ap-gold); color: white; border: none; padding: 0 10px; height: 30px; border-radius: 4px; font-weight: bold; cursor: pointer; font-size: 0.75rem; }
+        .btn-import { background: #27ae60; color: white; border: none; padding: 0 10px; height: 30px; border-radius: 4px; font-weight: bold; cursor: pointer; font-size: 0.75rem; }
+        .btn-reset { background: var(--danger); color: white; border: none; padding: 0 10px; height: 30px; border-radius: 4px; font-weight: bold; cursor: pointer; font-size: 0.75rem; }
+        
+        /* [새로 추가된 구글 연동 버튼 스타일] */
+        .btn-google-save { background: var(--google-green); color: white; border: none; padding: 0 10px; height: 30px; border-radius: 4px; font-weight: bold; cursor: pointer; font-size: 0.75rem; display: flex; align-items: center; gap: 4px; }
+        .btn-google-load { background: var(--google-blue); color: white; border: none; padding: 0 10px; height: 30px; border-radius: 4px; font-weight: bold; cursor: pointer; font-size: 0.75rem; display: flex; align-items: center; gap: 4px; }
+        .spinner { border: 2px solid rgba(255,255,255,0.3); border-top: 2px solid white; border-radius: 50%; width: 12px; height: 12px; animation: spin 1s linear infinite; display: none; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+        /* [로그 리스트 및 테이블 스타일] */
+        .list-section { flex: 1; overflow: auto; background: #eee; }
+        table { width: 100%; border-collapse: collapse; background: white; white-space: nowrap; }
+        th { background: #f8f9fa; position: sticky; top: 0; padding: 8px; font-size: 0.65rem; border-bottom: 2px solid #ddd; z-index: 10; color: #333; }
+        td { padding: 8px; border-bottom: 1px solid #eee; text-align: center; font-size: 0.75rem; color: #444; }
+        .row-total { font-weight: bold; color: var(--accent); }
+        .btn-edit { background: #54a0ff; color: white; border: none; width: 22px; height: 22px; border-radius: 3px; cursor: pointer; margin-right: 2px; font-size: 0.75rem; padding: 0; }
+        .btn-del { background: #ff7675; color: white; border: none; width: 22px; height: 22px; border-radius: 3px; cursor: pointer; font-size: 0.75rem; padding: 0; }
+
+        /* [데이터 관리 탭] */
+        .data-management { padding: 20px; display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        .data-card { background: white; padding: 15px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        .data-card h4 { margin-top: 0; color: var(--ap-navy); border-bottom: 2px solid var(--ap-navy); padding-bottom: 5px; }
+        .data-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(80px, 1fr)); gap: 8px; margin-bottom: 15px; align-items: flex-end; }
+        
+        @media (max-width: 1000px) { 
+            .input-section { overflow-x: auto; flex-wrap: nowrap; padding-bottom: 12px; } 
+            .data-management { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h3 style="margin:0; text-align: center; font-size:1.5rem;">Swlee's PILOT LOGBOOK</h3>
+        <div class="tab-menu">
+            <button class="tab-btn active" onclick="showTab('logTab', this)">Flight Log</button>
+            <button class="tab-btn" onclick="showTab('statTab', this)">Stats</button>
+            <button class="tab-btn" onclick="showTab('dataTab', this)">DATA</button>
+            <div class="btn-area">
+                <button class="btn-google-save" onclick="saveToGoogleSheet()" id="btnGSave">
+                    <span class="spinner" id="spinSave"></span> G-Save
+                </button>
+                <button class="btn-google-load" onclick="loadFromGoogleSheet()" id="btnGLoad">
+                    <span class="spinner" id="spinLoad"></span> G-Load
+                </button>
+                
+                <button class="btn-export" onclick="exportCSV()">EXPORT</button>
+                <button class="btn-import" onclick="document.getElementById('fileInput').click()">IMPORT</button>
+                <button class="btn-reset" onclick="resetAllData()">RESET</button>
+                <input type="file" id="fileInput" hidden accept=".csv" onchange="importCSV(this)">
+            </div>
+        </div>
+    </div>
+
+    <div id="logTab" class="content-section active">
+        <div class="input-section">
+            <input type="hidden" id="editId">
+            <div class="field"><label>Date</label><input type="date" id="date"></div>
+            <div class="field" style="display:none;"><label>TYPE</label><input type="hidden" id="type" value="B789"></div>
+            <div class="field">
+                <label>REG</label>
+                <select id="reg" onchange="handleRegChange()">
+                    <option value="">선택</option>
+                    <option value="SIM">SIM</option>
+                    <option value="HL8387">8387</option>
+                    <option value="HL8388">8388</option>
+                    <option value="HL8389">8389</option>
+                    <option value="HL8516">8516</option>
+                    <option value="HL8517">8517</option>
+                    <option value="HL8701">8701</option>
+                    <option value="HL8702">8702</option>
+                    <option value="HL8703">8703</option>
+                    <option value="HL8704">8704</option>
+                </select>
+            </div>
+            <div class="field">
+                <label>FLT NO</label>
+                <select id="fltno" onchange="autoFillRoute()"></select>
+            </div>
+            <div class="field">
+                <label>FM</label>
+                <input type="text" id="fm" placeholder="출발" readonly style="width: 40px; background-color: #eee;">
+            </div>
+            <div class="field">
+                <label>TO</label>
+                <input type="text" id="to" placeholder="도착" readonly style="width: 40px; background-color: #eee;">
+            </div>
+            <div class="field"><label>Code</label><select id="code"></select></div>
+            <div class="field"><label>BLOCK</label><input type="text" id="total" placeholder="0000" onblur="formatTimeInput(this)"></div>
+            <div class="field"><label>SIM</label><input type="text" id="sim" placeholder="0000" onblur="formatTimeInput(this)"></div>
+            <div class="field"><label>DayTO</label><select id="dto"><option value="0">0</option><option value="1">1</option></select></div>
+            <div class="field"><label>NtTO</label><select id="nto"><option value="0">0</option><option value="1">1</option></select></div>
+            <div class="field"><label>DayLD</label><select id="dld"><option value="0">0</option><option value="1">1</option></select></div>
+            <div class="field"><label>NtLD</label><select id="nld"><option value="0">0</option><option value="1">1</option></select></div>
+            <div class="field"><label>Remarks</label><input type="text" id="remark"></div>
+            <div class="btn-area">
+                <button id="btnAdd" class="btn-add" onclick="addLog()">ADD</button>
+                <button id="btnUpdate" class="btn-update" onclick="updateLog()">UPDATE</button>
+                <button id="btnCancel" class="btn-del" onclick="resetForm()" style="display: none; height: 30px; width: auto; padding: 0 12px;">CANCEL</button>
+            </div>
+        </div>
+
+        <div class="log-dashboard">
+            <div class="dash-card" id="cardRecTO"><div class="dash-label">RECENCY (TO)</div><div class="dash-recency" id="dashRecTO">-</div></div>
+            <div class="dash-card" id="cardRecLD"><div class="dash-label">RECENCY (LD)</div><div class="dash-recency" id="dashRecLD">-</div></div>
+            <div class="dash-card"><div class="dash-label">28 DAYS</div><div class="dash-value" id="dash28">00+00</div></div>
+            <div class="dash-card"><div class="dash-label">90 DAYS</div><div class="dash-value" id="dash90">00+00</div></div>
+            <div class="dash-card"><div class="dash-label">365 DAYS</div><div class="dash-value" id="dash365">00+00</div></div>
+        </div>
+
+        <div class="list-section">
+            <table>
+                <thead>
+                    <tr>
+                        <th>DATE</th><th>TYPE</th><th>REG</th><th>FM</th><th>TO</th><th>FLT NO</th>
+                        <th>BLOCK</th><th>IP</th><th>CAPT</th><th>F/O</th><th>SIM</th>
+                        <th>D.T/L</th><th>N.T/L</th><th>REMARKS</th><th>Management</th>
+                    </tr>
+                </thead>
+                <tbody id="logBody"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <div id="statTab" class="content-section">
+        <div class="stat-filter-area">
+            <div class="filter-group"><label>시작일:</label><input type="date" id="startDateFilter" onchange="render()"></div>
+            <div class="filter-group"><label>종료일:</label><input type="date" id="endDateFilter" onchange="render()"></div>
+            <div class="filter-group"><label>TYPE:</label><select id="typeFilter" onchange="render()"></select></div>
+            <div class="filter-group">
+                <label>Airlines:</label>
+                <select id="companyFilter" onchange="render()">
+                    <option value="ALL">All Airlines</option><option value="KE">Korean Air</option>
+                    <option value="HU">Hainan Airlines</option><option value="YP">Air PREMIA</option><option value="ETC">ETC</option>
+                </select>
+            </div>
+            <div class="filter-group"><label>FM:</label><select id="fromFilter" onchange="render()"></select></div>
+            <div class="filter-group"><label>TO:</label><select id="toFilter" onchange="render()"></select></div>
+            <div class="filter-group">
+                <button onclick="resetStatsFilters()" style="width:100%; height:30px; background:var(--danger); color:white; border:none; border-radius:4px; font-weight:bold; cursor:pointer;">RESET</button>
+            </div>
+        </div>
+
+        <div class="stats-container">
+            <div class="stat-card"><div class="stat-label">BLOCK TIME</div><div class="stat-value" id="statTime">00+00</div></div>
+            <div class="stat-card" style="border-left-color: var(--accent);">
+                <div class="stat-label">PIC TIME (IP+CAPT)</div>
+                <div class="stat-value"><span id="statPIC">00+00</span> <span class="stat-sub" id="statIPSub">(00+00)</span></div>
+            </div>
+            <div class="stat-card"><div class="stat-label">F/O TIME</div><div class="stat-value" id="statFO">00+00</div></div>
+            <div class="stat-card"><div class="stat-label">TOTAL FLIGHTS</div><div class="stat-value" id="statFlt">0</div></div>
+            <div class="stat-card"><div class="stat-label">SIM TIME</div><div class="stat-value" id="statSimTotal">00+00</div></div>
+            <div class="stat-card" style="border-top-color: var(--accent);">
+                <div class="stat-label">TO / LD <span style="font-size:0.7em">(Night)</span></div>
+                <div class="stat-value" id="statToLdCombined" style="font-size: 1.1rem;">0(0) / 0(0)</div>
+            </div>
+        </div>
+    </div>
+
+    <div id="dataTab" class="content-section">
+        <div class="data-management">
+            <div class="data-card">
+                <h4>FLT NO DATA</h4>
+                <div class="data-form">
+                    <div class="field"><label>FLT NO</label><input type="text" id="newDataFlt" placeholder="YP"></div>
+                    <div class="field"><label>FM</label><input type="text" id="newDataFm" placeholder="FM"></div>
+                    <div class="field"><label>TO</label><input type="text" id="newDataTo" placeholder="TO"></div>
+                    <button class="btn-add" onclick="saveRouteData()">저장</button>
+                </div>
+                <table>
+                    <thead><tr><th>FLT NO</th><th>FM</th><th>TO</th><th>삭제</th></tr></thead>
+                    <tbody id="routeDataBody"></tbody>
+                </table>
+            </div>
+
+            <div class="data-card">
+                <h4>Code DATA</h4>
+                <div class="data-form">
+                    <div class="field"><label>Code</label><input type="text" id="newCodeName" placeholder="예: 2C1"></div>
+                    <div class="field"><label>IP 비율</label>
+                        <select id="rateIP">
+                            <option value="1">1</option><option value="0.666">2/3</option><option value="0.5">1/2</option><option value="0.333">1/3</option><option value="0.4">2/5</option><option value="0" selected>0</option>
+                        </select>
+                    </div>
+                    <div class="field"><label>CAPT 비율</label>
+                        <select id="rateCapt">
+                            <option value="1" selected>1</option><option value="0.666">2/3</option><option value="0.5">1/2</option><option value="0.333">1/3</option><option value="0.4">2/5</option><option value="0">0</option>
+                        </select>
+                    </div>
+                    <div class="field"><label>FO 비율</label>
+                        <select id="rateFO">
+                            <option value="1">1</option><option value="0.666">2/3</option><option value="0.5">1/2</option><option value="0.333">1/3</option><option value="0.4">2/5</option><option value="0" selected>0</option>
+                        </select>
+                    </div>
+                    <button class="btn-add" onclick="saveCodeData()">저장</button>
+                </div>
+                <table><thead><tr><th>Code</th><th>IP</th><th>CAPT</th><th>FO</th><th>삭제</th></tr></thead><tbody id="codeDataBody"></tbody></table>
+            </div>
+        </div>
+    </div>
+
+    <div id="modalOverlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; justify-content: center; align-items: center;">
+        <div style="background: white; padding: 20px; border-radius: 8px; width: 300px; text-align: center; box-shadow: 0 4px 15px rgba(0,0,0,0.2);">
+            <h4 id="modalTitle" style="margin-top: 0; color: var(--ap-navy);">알림</h4>
+            <p id="modalMsg" style="font-size: 0.9rem; color: #555; margin: 20px 0;"></p>
+            <div style="display: flex; gap: 10px; justify-content: center;">
+                <button onclick="closeModal(true)" style="background: var(--ap-navy); color: white; border: none; padding: 8px 20px; border-radius: 4px; cursor: pointer; font-weight: bold;">확인</button>
+                <button id="modalCancelBtn" onclick="closeModal(false)" style="background: #ccc; color: #333; border: none; padding: 8px 20px; border-radius: 4px; cursor: pointer; font-weight: bold;">취소</button>
+            </div>
+        </div>
+    </div>
+
+<script>
+        // =========================================================================
+        // [중요] 여기에 Google Apps Script 배포 URL을 붙여넣으세요.
+        // =========================================================================
+        const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwQnaE061lhLQnHP1-lVQov-0RHcSUUQhgcG9-06z7zaR3vRrV9iX_aYRFjAXmW_z7S/exec"; 
+        
+        const STORAGE_KEY = 'pilot_log_v_tablet';
+        const ROUTE_KEY = 'pilot_routes_v1';
+        const CODE_KEY = 'pilot_codes_v1';
+
+        let logs = [];
+        let routes = [];
+        let codeRules = [];
+
+        function init() {
+            document.getElementById('date').valueAsDate = new Date();
+            
+            try {
+                const savedLogs = localStorage.getItem(STORAGE_KEY);
+                logs = savedLogs ? JSON.parse(savedLogs) : [];
+                if (!Array.isArray(logs)) logs = [];
+            } catch (e) { logs = []; }
+
+            try {
+                const savedRoutes = localStorage.getItem(ROUTE_KEY);
+                routes = savedRoutes ? JSON.parse(savedRoutes) : [];
+                if (!Array.isArray(routes)) routes = [];
+                if(routes.length === 0) routes = [{"fltno":"YP131","fm":"ICN","to":"LAX"}];
+            } catch (e) { routes = []; }
+
+            try {
+                const savedCodes = localStorage.getItem(CODE_KEY);
+                codeRules = savedCodes ? JSON.parse(savedCodes) : [];
+                if (!Array.isArray(codeRules)) codeRules = [];
+                if(codeRules.length === 0) codeRules = [{"name":"2C1","ip":0,"capt":1,"fo":0}];
+            } catch (e) { codeRules = []; }
+
+            updateFltNoDropdown();
+            updateCodeDropdown();
+            render(); 
+            renderRouteTable();
+            renderCodeTable();
+        }
+
+/* [G-Load 수정] 목록 글씨 크기 조절됨 (1rem -> 0.8rem) */
+function loadFromGoogleSheet() {
+    if (!GOOGLE_SCRIPT_URL) { alert("URL을 설정해주세요."); return; }
+
+    const btn = document.getElementById('btnGLoad');
+    const spinner = document.getElementById('spinLoad');
+    btn.disabled = true; spinner.style.display = 'inline-block';
+
+    // 1. 저장된 시트 목록 가져오기
+    fetch(GOOGLE_SCRIPT_URL + "?mode=list")
+    .then(r => r.json())
+    .then(sheetNames => {
+        btn.disabled = false; spinner.style.display = 'none';
+
+        if (!Array.isArray(sheetNames) || sheetNames.length === 0) {
+            alert("저장된 백업 데이터가 없습니다.");
+            return;
+        }
+
+        // 2. 선택창(Dropdown) HTML 생성 - 여기서 font-size 조절
+        let options = sheetNames.map(name => `<option value="${name}">${name.replace('Log_', '')}</option>`).join('');
+        let msgHtml = `
+            <p style="margin: 0 0 10px 0; font-size: 0.9rem;">불러올 백업 데이터를 선택하세요.</p>
+            
+            <select id="backupSelect" style="width: 100%; padding: 8px; height: 50px; font-size: 1rem; border: 1px solid #ccc; border-radius: 4px;">
+                ${options}
+            </select>
+            
+            <p style="font-size: 0.75rem; color: #e74c3c; margin-top: 10px;">주의: 현재 기기의 데이터가 덮어씌워집니다.</p>
+        `;
+
+        // 3. 모달 띄우기
+        showModal("데이터 불러오기", msgHtml, (ok) => {
+            if (!ok) return;
+            const selectedSheet = document.getElementById('backupSelect').value;
+            fetchSpecificSheet(selectedSheet);
+        }, true, true);
+    })
+    .catch(e => {
+        btn.disabled = false; spinner.style.display = 'none';
+        alert("목록 불러오기 실패: " + e);
+    });
+}
+
+// 아래 코드를 복사해서 LogBook 파일의 스크립트 부분에 추가하세요.
+
+function fetchSpecificSheet(sheetName) {
+    const btn = document.getElementById('btnGLoad');
+    const spinner = document.getElementById('spinLoad');
+    
+    // 이미 로딩바가 돌고 있겠지만 확실히 하기 위해 표시
+    btn.disabled = true; 
+    spinner.style.display = 'inline-block';
+
+    // 실제로 데이터를 가져오는 요청
+    fetch(GOOGLE_SCRIPT_URL + "?mode=load&sheet=" + encodeURIComponent(sheetName))
+    .then(response => response.json())
+    .then(data => {
+        if (!Array.isArray(data)) {
+            alert("데이터 형식이 올바르지 않습니다.");
+            return;
+        }
+
+        // 데이터 복구 진행
+        logs = data;
+        saveData(); // 로컬 스토리지에 저장
+        render();   // 화면 갱신
+        
+        closeModal(); // 모달 닫기
+        alert("성공적으로 불러왔습니다! (" + logs.length + "건)");
+    })
+    .catch(error => {
+        alert("데이터 가져오기 실패: " + error);
+    })
+    .finally(() => {
+        // 로딩 종료
+        btn.disabled = false;
+        spinner.style.display = 'none';
+    });
+}
+        /* [G-Save] */
+        function saveToGoogleSheet() {
+            if (!GOOGLE_SCRIPT_URL) { alert("URL을 설정해주세요."); return; }
+            if (logs.length === 0) { alert("데이터가 없습니다."); return; }
+
+            const btn = document.getElementById('btnGSave');
+            const spinner = document.getElementById('spinSave');
+            btn.disabled = true; spinner.style.display = 'inline-block';
+            
+            fetch(GOOGLE_SCRIPT_URL, {
+                method: "POST",
+                body: JSON.stringify(logs)
+            })
+            .then(r => r.text())
+            .then(d => { alert(d.includes("Success") ? "저장 완료!" : "실패: " + d); })
+            .catch(e => alert("오류: " + e))
+            .finally(() => { btn.disabled = false; spinner.style.display = 'none'; });
+        }
+
+        /* [UI] 모달 기능 업그레이드 (HTML 지원) */
+        let modalCallback = null;
+        function showModal(title, msg, callback, showCancel = true, isHtml = false) {
+            document.getElementById('modalTitle').innerText = title;
+            
+            const msgEl = document.getElementById('modalMsg');
+            if (isHtml) {
+                msgEl.innerHTML = msg; // HTML 태그 적용
+            } else {
+                msgEl.innerText = msg; // 일반 텍스트
+            }
+            
+            document.getElementById('modalOverlay').style.display = 'flex';
+            document.getElementById('modalCancelBtn').style.display = showCancel ? 'inline-block' : 'none';
+            modalCallback = callback;
+        }
+
+        function closeModal(result) {
+            document.getElementById('modalOverlay').style.display = 'none';
+            const cb = modalCallback; modalCallback = null;
+            if (cb) cb(result);
+        }
+
+        /* 기타 기본 기능들 (ADD, EDIT, DELETE 등) 유지 */
+        function addLog() {
+            const totalInput = document.getElementById('total').value;
+            const simInput = document.getElementById('sim').value;
+            const totalMins = timeToMins(totalInput);
+            const simMins = timeToMins(simInput);
+
+            if(totalMins === 0 && simMins === 0) {
+                alert("비행 시간(BLOCK) 또는 시뮬레이터(SIM) 시간을 입력해주세요.");
+                return;
+            }
+
+            const b = calculateBreakdown(document.getElementById('code').value, totalMins);
+            logs.push({ 
+                id: Date.now(), 
+                type: document.getElementById('type').value.toUpperCase() || "B789", 
+                date: document.getElementById('date').value,
+                reg: document.getElementById('reg').value.toUpperCase(), 
+                fm: document.getElementById('fm').value, 
+                to: document.getElementById('to').value,
+                fltno: document.getElementById('fltno').value.toUpperCase(), 
+                code: document.getElementById('code').value,
+                total: minsToTime(totalMins), 
+                ip: minsToTime(b.ip), 
+                capt: minsToTime(b.capt), 
+                fo: minsToTime(b.fo),
+                sim: minsToTime(simMins), 
+                dto: document.getElementById('dto').value, 
+                nto: document.getElementById('nto').value, 
+                dld: document.getElementById('dld').value, 
+                nld: document.getElementById('nld').value, 
+                remark: document.getElementById('remark').value
+            });
+            saveData(); render(); resetForm();
+        }
+
+        function editLog(id) {
+            showModal("수정 모드", "선택한 로그를 불러오시겠습니까?", (ok) => {
+                if (!ok) return;
+                const log = logs.find(l => String(l.id) === String(id)); 
+                if(!log) { alert("로그를 찾을 수 없습니다."); return; }
+
+                setValueSafe('date', log.date);
+                setValueSafe('type', log.type);
+                setValueSafe('reg', log.reg);
+                setValueSafe('fltno', log.fltno);
+                setValueSafe('fm', log.fm);
+                setValueSafe('to', log.to);
+                setValueSafe('code', log.code);
+                setValueSafe('total', log.total);
+                setValueSafe('sim', log.sim);
+                setValueSafe('dto', log.dto);
+                setValueSafe('nto', log.nto);
+                setValueSafe('dld', log.dld);
+                setValueSafe('nld', log.nld);
+                setValueSafe('remark', log.remark);
+                
+                document.getElementById('editId').value = log.id;
+                document.getElementById('btnAdd').style.display = 'none'; 
+                document.getElementById('btnUpdate').style.display = 'inline-block';
+                document.getElementById('btnCancel').style.display = 'inline-block';
+
+                document.querySelector('.input-section').style.backgroundColor = '#fff3cd';
+                window.scrollTo(0, 0);
+                const activeTab = document.querySelector('.content-section.active');
+                if(activeTab) activeTab.scrollTo(0, 0);
+            });
+        }
+
+        function updateLog() {
+            const id = document.getElementById('editId').value;
+            const idx = logs.findIndex(l => String(l.id) === String(id));
+            if(idx !== -1) {
+                const tM = timeToMins(document.getElementById('total').value);
+                const b = calculateBreakdown(document.getElementById('code').value, tM);
+                logs[idx] = { 
+                    ...logs[idx], 
+                    type: document.getElementById('type').value.toUpperCase(), 
+                    date: document.getElementById('date').value,
+                    reg: document.getElementById('reg').value.toUpperCase(), 
+                    fm: document.getElementById('fm').value, 
+                    to: document.getElementById('to').value,
+                    fltno: document.getElementById('fltno').value.toUpperCase(), 
+                    code: document.getElementById('code').value,
+                    total: minsToTime(tM), ip: minsToTime(b.ip), capt: minsToTime(b.capt), fo: minsToTime(b.fo),
+                    sim: minsToTime(timeToMins(document.getElementById('sim').value)), 
+                    dto: document.getElementById('dto').value, nto: document.getElementById('nto').value, 
+                    dld: document.getElementById('dld').value, nld: document.getElementById('nld').value, 
+                    remark: document.getElementById('remark').value
+                };
+                saveData(); render(); resetForm();
+                alert("수정 완료");
+            }
+        }
+
+        function deleteLog(id) { 
+            showModal("삭제 확인", "정말로 삭제하시겠습니까?", (ok) => {
+                if (ok) { logs = logs.filter(l => String(l.id) !== String(id)); saveData(); render(); }
+            });
+        }
+
+        function resetForm() {
+            ['editId','type','fltno','total','sim','remark','fm','to'].forEach(id => setValueSafe(id, ''));
+            setValueSafe('reg', ''); setValueSafe('code', '');
+            setValueSafe('dto', '0'); setValueSafe('nto', '0'); setValueSafe('dld', '0'); setValueSafe('nld', '0');
+            document.getElementById('btnAdd').style.display = 'inline-block'; 
+            document.getElementById('btnUpdate').style.display = 'none';
+            document.getElementById('btnCancel').style.display = 'none';
+            document.getElementById('date').valueAsDate = new Date();
+            document.querySelector('.input-section').style.backgroundColor = 'var(--white)';
+        }
+
+        function deleteRoute(flt) {
+            showModal("노선 삭제", `[${flt}] 삭제하시겠습니까?`, (ok) => {
+                if(ok) { routes = routes.filter(r => r.fltno !== flt); localStorage.setItem(ROUTE_KEY, JSON.stringify(routes)); renderRouteTable(); updateFltNoDropdown(); }
+            });
+        }
+        function saveRouteData() {
+            const flt = document.getElementById('newDataFlt').value.toUpperCase().trim();
+            const fm = document.getElementById('newDataFm').value.toUpperCase().trim();
+            const to = document.getElementById('newDataTo').value.toUpperCase().trim();
+            if (!flt || !fm || !to) { alert("모두 입력하세요."); return; }
+            const idx = routes.findIndex(r => r.fltno === flt);
+            if(idx > -1) routes[idx] = { fltno: flt, fm, to }; else routes.push({ fltno: flt, fm, to });
+            localStorage.setItem(ROUTE_KEY, JSON.stringify(routes));
+            document.getElementById('newDataFlt').value = ''; document.getElementById('newDataFm').value = ''; document.getElementById('newDataTo').value = '';
+            renderRouteTable(); updateFltNoDropdown();
+        }
+        function deleteCode(n) { 
+            showModal("코드 삭제", `[${n}] 삭제하시겠습니까?`, (ok) => {
+                if(ok) { codeRules = codeRules.filter(c=>c.name!==n); localStorage.setItem(CODE_KEY, JSON.stringify(codeRules)); renderCodeTable(); updateCodeDropdown(); }
+            });
+        }
+        function saveCodeData() {
+            const name = document.getElementById('newCodeName').value.toUpperCase().trim();
+            const ip = parseFloat(document.getElementById('rateIP').value)||0, capt = parseFloat(document.getElementById('rateCapt').value)||0, fo = parseFloat(document.getElementById('rateFO').value)||0;
+            if(!name) { alert("코드명 입력"); return; }
+            const idx = codeRules.findIndex(c => c.name === name);
+            if(idx > -1) codeRules[idx] = {name, ip, capt, fo}; else codeRules.push({name, ip, capt, fo});
+            localStorage.setItem(CODE_KEY, JSON.stringify(codeRules));
+            renderCodeTable(); updateCodeDropdown(); document.getElementById('newCodeName').value = '';
+        }
+
+        function setValueSafe(id, val) { const el = document.getElementById(id); if(el) el.value = (val === undefined || val === null) ? '' : val; }
+        function normalizeType(t) { if(!t) return "ETC"; const u = t.toUpperCase().trim(); if(u.startsWith("B73")) return "B737"; if(u.startsWith("B77")) return "B777"; if(u.startsWith("B78")) return "B787"; return u; }
+        function getCompany(f) { if(!f || f.length<2) return "ETC"; const p = f.substring(0,2).toUpperCase(); return ["KE","HU","YP"].includes(p)?p:"ETC"; }
+        function timeToMins(t) { if(!t||t==="00+00") return 0; const c=String(t).replace(/\D/g,'').padStart(4,'0').slice(-4); return (parseInt(c.slice(0,2))||0)*60+(parseInt(c.slice(2,4))||0); }
+        function minsToTime(m) { const hh=Math.floor(m/60).toString().padStart(2,'0'), mm=(m%60).toString().padStart(2,'0'); return `${hh}+${mm}`; }
+        function formatTimeInput(i) { let v=i.value.replace(/\D/g,''); if(v.length===0){i.value="00+00";return;} v=v.padStart(4,'0').slice(-4); i.value=`${v.slice(0,2)}+${Math.min(parseInt(v.slice(2,4)),59).toString().padStart(2,'0')}`; }
+        function calculateBreakdown(c, t) { const r=codeRules.find(x=>x.name===c); if(!r) return {ip:0,capt:0,fo:0}; return {ip:Math.floor(t*r.ip), capt:Math.floor(t*r.capt), fo:Math.floor(t*r.fo)}; }
+        function saveData() { localStorage.setItem(STORAGE_KEY, JSON.stringify(logs)); }
+
+        function render() {
+            updateDynamicFilters();
+            const body = document.getElementById('logBody'); body.innerHTML = '';
+            logs.sort((a,b) => new Date(b.date)-new Date(a.date));
+            
+            const sDate = document.getElementById('startDateFilter').value, eDate = document.getElementById('endDateFilter').value;
+            const selType = document.getElementById('typeFilter').value, selComp = document.getElementById('companyFilter').value;
+            const selFrom = document.getElementById('fromFilter').value, selTo = document.getElementById('toFilter').value;
+            const now = new Date();
+            const d28 = new Date(); d28.setDate(now.getDate()-28);
+            const d90 = new Date(); d90.setDate(now.getDate()-90);
+            const d365 = new Date(); d365.setDate(now.getDate()-365);
+            let m28=0, m90=0, m365=0, tMins=0, ipMTotal=0, cpMTotal=0, foMTotal=0, simMTotal=0, tDto=0, tDld=0, tNto=0, tNld=0, fCnt=0;
+            let toDates=[], ldDates=[];
+
+            logs.forEach(l => {
+                const logDate = new Date(l.date), curM = timeToMins(l.total);
+                if(logDate>=d28 && logDate<=now) m28+=curM;
+                if(logDate>=d90 && logDate<=now) m90+=curM;
+                if(logDate>=d365 && logDate<=now) m365+=curM;
+
+                if((!sDate||l.date>=sDate) && (!eDate||l.date<=eDate) && (selType==="ALL"||normalizeType(l.type)===selType) &&
+                   (selComp==="ALL"||getCompany(l.fltno)===selComp) && (selFrom==="ALL"||(l.fm||"")===selFrom) && (selTo==="ALL"||(l.to||"")===selTo)) {
+                    
+                    const row = body.insertRow();
+                    const dto=parseInt(l.dto)||0, dld=parseInt(l.dld)||0, nto=parseInt(l.nto)||0, nld=parseInt(l.nld)||0;
+                    row.innerHTML = `<td>${l.date}</td><td>${l.type}</td><td>${l.reg.toUpperCase()}</td><td>${l.fm||''}</td><td>${l.to||''}</td><td>${l.fltno.toUpperCase()}</td>
+                        <td class="row-total">${l.total||'00+00'}</td><td>${l.ip}</td><td>${l.capt}</td><td>${l.fo}</td><td>${l.sim}</td>
+                        <td>${dto}/${dld}</td><td>${nto}/${nld}</td><td>${l.remark}</td>
+                        <td><button class="btn-edit" onclick="editLog('${l.id}')">✎</button><button class="btn-del" onclick="deleteLog('${l.id}')">×</button></td>`;
+                    
+                    tMins+=curM; ipMTotal+=timeToMins(l.ip); cpMTotal+=timeToMins(l.capt); foMTotal+=timeToMins(l.fo); simMTotal+=timeToMins(l.sim);
+                    tDto+=dto; tDld+=dld; tNto+=nto; tNld+=nld; fCnt++;
+                    if(timeToMins(l.sim)>0) { for(let k=0;k<3;k++){ toDates.push(l.date); ldDates.push(l.date); } }
+                    else { if((dto+nto)>0) toDates.push(l.date); if((dld+nld)>0) ldDates.push(l.date); }
+                }
+            });
+            toDates.sort((a,b)=>new Date(b)-new Date(a)); ldDates.sort((a,b)=>new Date(b)-new Date(a));
+            const thirdTO = toDates[2]||null, thirdLD = ldDates[2]||null;
+            document.getElementById('dash28').innerText = minsToTime(m28); document.getElementById('dash90').innerText = minsToTime(m90); document.getElementById('dash365').innerText = minsToTime(m365);
+            
+            const addDays = (ds, d) => { if(!ds) return null; let dt = new Date(ds); dt.setDate(dt.getDate() + d); return dt; };
+            const formatYMD = (dt) => dt ? dt.toISOString().split('T')[0] : "-";
+            const applyRecencyColor = (cid, tid, date) => {
+                const c = document.getElementById(cid), t = document.getElementById(tid);
+                if(!date) { c.style.borderTopColor = 'var(--ap-navy)'; t.style.color = 'var(--ap-navy)'; t.innerText = "-"; return; }
+                const diff = (date - now) / (1000 * 60 * 60 * 24);
+                if(diff <= 15) { c.style.borderTopColor = 'var(--danger)'; t.style.color = 'var(--danger)'; } 
+                else { c.style.borderTopColor = 'var(--ap-navy)'; t.style.color = 'var(--ap-navy)'; }
+                t.innerText = formatYMD(date);
+            };
+            applyRecencyColor('cardRecTO', 'dashRecTO', addDays(thirdTO, 90)); applyRecencyColor('cardRecLD', 'dashRecLD', addDays(thirdLD, 90));
+            document.getElementById('statTime').innerText = minsToTime(tMins); document.getElementById('statPIC').innerText = minsToTime(ipMTotal+cpMTotal);
+            document.getElementById('statIPSub').innerText = `(${minsToTime(ipMTotal)})`; document.getElementById('statFO').innerText = minsToTime(foMTotal);
+            document.getElementById('statSimTotal').innerText = minsToTime(simMTotal); document.getElementById('statFlt').innerText = fCnt;
+            document.getElementById('statToLdCombined').innerText = `${tDto+tNto}(${tNto}) / ${tDld+tNld}(${tNld})`;
+        }
+        function updateDynamicFilters() {
+            const tf=document.getElementById('typeFilter'), curT=tf.value||"ALL", types=[...new Set(logs.map(l=>normalizeType(l.type)))].sort();
+            tf.innerHTML='<option value="ALL">All Types</option>'; types.forEach(t=>{if(t)tf.add(new Option(t,t));}); if([...tf.options].some(o=>o.value===curT))tf.value=curT;
+            const ff=document.getElementById('fromFilter'), curF=ff.value||"ALL", fms=[...new Set(logs.map(l=>l.fm))].filter(s=>s).sort();
+            ff.innerHTML='<option value="ALL">All Airports</option>'; fms.forEach(s=>ff.add(new Option(s,s))); if([...ff.options].some(o=>o.value===curF))ff.value=curF;
+            const tof=document.getElementById('toFilter'), curTo=tof.value||"ALL", tos=[...new Set(logs.map(l=>l.to))].filter(s=>s).sort();
+            tof.innerHTML='<option value="ALL">All Airports</option>'; tos.forEach(s=>tof.add(new Option(s,s))); if([...tof.options].some(o=>o.value===curTo))tof.value=curTo;
+        }
+        function showTab(tabId, btn) {
+            document.querySelectorAll('.content-section').forEach(s => s.classList.remove('active'));
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            document.getElementById(tabId).classList.add('active');
+            btn.classList.add('active');
+        }
+        function resetStatsFilters() {
+            setValueSafe('startDateFilter',''); setValueSafe('endDateFilter',''); setValueSafe('typeFilter','ALL'); setValueSafe('companyFilter','ALL'); setValueSafe('fromFilter','ALL'); setValueSafe('toFilter','ALL'); render();
+        }
+        function autoFillRoute() {
+            const r = routes.find(x => x.fltno === document.getElementById('fltno').value);
+            if(r) { setValueSafe('fm', r.fm); setValueSafe('to', r.to); } else { setValueSafe('fm', ''); setValueSafe('to', ''); }
+        }
+        function updateFltNoDropdown() { const s=document.getElementById('fltno'); s.innerHTML='<option value="">선택</option>'; [...routes].sort((a,b)=>a.fltno.localeCompare(b.fltno)).forEach(r=>s.add(new Option(r.fltno,r.fltno))); }
+        function updateCodeDropdown() { const s=document.getElementById('code'); s.innerHTML='<option value="">선택</option>'; [...codeRules].sort((a,b)=>a.name.localeCompare(b.name)).forEach(c=>s.add(new Option(c.name,c.name))); }
+        function renderRouteTable() { const b=document.getElementById('routeDataBody'); b.innerHTML=''; routes.sort((a,z)=>a.fltno.localeCompare(z.fltno)); routes.forEach(r=>{ b.insertRow().innerHTML=`<td>${r.fltno}</td><td>${r.fm}</td><td>${r.to}</td><td><button class="btn-del" onclick="deleteRoute('${r.fltno}')">×</button></td>`; }); }
+        function renderCodeTable() { const b=document.getElementById('codeDataBody'); b.innerHTML=''; codeRules.sort((a,z)=>a.name.localeCompare(z.name)); codeRules.forEach(c=>{ b.insertRow().innerHTML=`<td>${c.name}</td><td>${c.ip}</td><td>${c.capt}</td><td>${c.fo}</td><td><button class="btn-del" onclick="deleteCode('${c.name}')">×</button></td>`; }); }
+        function handleRegChange() { if(document.getElementById('reg').value==="SIM"){ setValueSafe('type','B789'); setValueSafe('fltno','YP'); setValueSafe('fm',''); setValueSafe('to',''); setValueSafe('code',''); setValueSafe('total',''); setValueSafe('dto','0'); setValueSafe('nto','0'); setValueSafe('dld','0'); setValueSafe('nld','0'); } }
+        function exportCSV() {
+            let csv="\ufeffDate,TYPE,REG,FM,TO,FLT NO,Block,IP,Captain,FO,SIM,DayTO,DayLD,NtTO,NtLD,Remarks\n";
+            logs.forEach(l=>{csv+=`${l.date},${l.type},${l.reg},${l.fm||''},${l.to||''},${l.fltno},${l.total},${l.ip},${l.capt},${l.fo},${l.sim},${l.dto},${l.dld},${l.nto},${l.nld},"${l.remark}"\n`;});
+            const link=document.createElement("a"); link.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8;'})); link.download=`Pilot_Logbook_${new Date().toISOString().slice(0,10)}.csv`; link.click();
+        }
+        function importCSV(i) {
+            const r=new FileReader(); r.onload=function(e){
+                const rows=e.target.result.split('\n').filter(r=>r.trim()!==""); if(rows.length<2) return;
+                const newLogs=[];
+                for(let k=1;k<rows.length;k++){
+                    const c=rows[k].split(',').map(s=>s.replace(/"/g,'').trim()); if(c.length<10) continue;
+                    newLogs.push({id:Date.now()+k, date:c[0], type:c[1]||'B789', reg:c[2]||'', fm:c[3]||'', to:c[4]||'', fltno:c[5]||'', total:c[6]||'00+00', ip:c[7]||'00+00', capt:c[8]||'00+00', fo:c[9]||'00+00', sim:c[10]||'00+00', dto:c[11]||0, dld:c[12]||0, nto:c[13]||0, nld:c[14]||0, remark:c[15]||""});
+                }
+                if(newLogs.length>0) showModal("복구 확인", `${newLogs.length}개의 데이터를 복구하시겠습니까?`, (ok)=>{if(ok){logs=[...newLogs,...logs];saveData();render();}});
+            }; r.readAsText(i.files[0],"UTF-8"); i.value='';
+        }
+        function resetAllData() { showModal("전체 초기화", "모든 기록이 삭제됩니다.", (ok)=>{if(ok){localStorage.clear();location.reload();}}); }
+        window.onload = init;
+    </script></body>
+</html>
