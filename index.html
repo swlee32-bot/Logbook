@@ -1348,7 +1348,15 @@
         }
 
         window.onload = init;
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+            navigator.serviceWorker.register('./sw.js')
+                .then(reg => console.log('Service Worker 등록 완료:', reg))
+                .catch(err => console.log('Service Worker 등록 실패:', err));
+        });
+    }
     </script>
 </body>
 
 </html>
+
