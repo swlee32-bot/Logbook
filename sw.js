@@ -1,4 +1,4 @@
-const CACHE_NAME = 'logbook-v2';
+const CACHE_NAME = 'logbook-cache-v3'; // 👈 v3로 올려서 기존 스마트폰에 남아있는 고장난 캐시를 강제로 박살냅니다.
 const ASSETS_TO_CACHE = [
     './',
     './index.html',
@@ -6,9 +6,9 @@ const ASSETS_TO_CACHE = [
     './icon-192.png',
     './icon-512.png'
 ];
-const TIMEOUT_DURATION = 3000; // 3초 타임아웃 설정
+const TIMEOUT_DURATION = 3000; // 3초 타임아웃 (구글 통신 제외, 일반 화면 파일용)
 
-// ⏱️ 타임아웃이 적용된 커스텀 fetch 함수 (가짜 와이파이 무한 로딩 방어)
+// ⏱️ 일반 파일(HTML 등)에 적용할 타임아웃 fetch 함수 (가짜 와이파이 방어용)
 const fetchWithTimeout = async (request, timeout) => {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), timeout);
@@ -19,11 +19,11 @@ const fetchWithTimeout = async (request, timeout) => {
         return response;
     } catch (error) {
         clearTimeout(timeoutId);
-        throw error; // 타임아웃 시 강제로 에러 발생
+        throw error; 
     }
 };
 
-// 1. 설치 시점에 파일들을 기기에 캐시(저장)
+// 1. 앱 설치 시 파일들을 기기에 저장
 self.addEventListener('install', event => {
     event.waitUntil(
         caches.open(CACHE_NAME)
@@ -32,7 +32,7 @@ self.addEventListener('install', event => {
     self.skipWaiting(); // 새 버전 설치 시 즉시 대기상태 해제
 });
 
-// 🌟 2. [추가됨] 앱 업데이트 시 오래된 과거 캐시 완벽 삭제
+// 2. 앱 업데이트 시 구버전(v1, v2) 찌꺼기 완벽 삭제
 self.addEventListener('activate', event => {
     event.waitUntil(
         caches.keys().then(cacheNames => {
@@ -48,20 +48,13 @@ self.addEventListener('activate', event => {
     self.clients.claim(); // 새 서비스 워커가 즉시 제어권 획득
 });
 
-// 3. 가짜 와이파이/오프라인 대응 (Cache First 전략 + 타임아웃)
+// 3. 통신 가로채기 (구글 시트 예외 처리 + Cache First)
 self.addEventListener('fetch', event => {
     const url = new URL(event.request.url);
 
-    // 구글 시트 동기화(fetch) 요청: 5초 안에 응답 없으면 강제 차단하여 멈춤 현상 방지
-    if (url.hostname.includes('script.google.com') || event.request.method !== 'GET') {
-        event.respondWith(
-            fetchWithTimeout(event.request, 5000).catch(() => {
-                // 가짜 와이파이에서 무한 로딩하지 않고 즉시 에러 메시지 반환
-                return new Response(JSON.stringify({ result: "error", msg: "네트워크가 불안정하거나 오프라인 상태입니다." }), {
-                    headers: { 'Content-Type': 'application/json' }
-                });
-            })
-        );
+    // 🚨 핵심 수정 부분: 구글 시트 통신(리다이렉트 포함)은 서비스 워커가 건드리지 않고 완전히 통과시킴! 
+    // 브라우저가 알아서 10초든 20초든 통신이 끝날 때까지 기다리게 됩니다.
+    if (url.hostname.includes('script.google.com') || url.hostname.includes('googleusercontent.com') || event.request.method !== 'GET') {
         return; 
     }
 
@@ -85,4 +78,3 @@ self.addEventListener('fetch', event => {
             })
     );
 });
-
