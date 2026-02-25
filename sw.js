@@ -1,4 +1,4 @@
-const CACHE_NAME = 'logbook-cache-v2';
+const CACHE_NAME = 'logbook-v2';
 const ASSETS_TO_CACHE = [
     './',
     './index.html',
@@ -85,3 +85,4 @@ self.addEventListener('fetch', event => {
             })
     );
 });
+
