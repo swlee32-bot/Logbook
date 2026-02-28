@@ -1,10 +1,10 @@
-const CACHE_NAME = 'logbook-cache-v4'; // 👈 v3로 올려서 기존 스마트폰에 남아있는 고장난 캐시를 강제로 박살냅니다.
+const CACHE_NAME = 'logbook-cache-v5'; // 👈 v3로 올려서 기존 스마트폰에 남아있는 고장난 캐시를 강제로 박살냅니다.
 const ASSETS_TO_CACHE = [
-  './',
-  './index.html',
-  './manifest.json',
-  './icon-192.png',
-  './icon-512.png'
+  '/',
+  '/index.html',
+  '/manifest.json',
+  '/icon-192.png',
+  '/icon-512.png'
 ];
 const TIMEOUT_DURATION = 3000; // 3초 타임아웃 (구글 통신 제외, 일반 화면 파일용)
 
@@ -93,3 +93,4 @@ self.addEventListener('fetch', event => {
     })()
   );
 });
+
